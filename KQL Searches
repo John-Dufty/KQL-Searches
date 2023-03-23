@@ -1,0 +1,582 @@
+//Useragent sign-in's over time
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName == "x"
+| summarize count() by UserAgent, TimeGenerated
+| render timechart
+
+//User sign-in locations over time
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName == "x"
+| summarize count() by Location, TimeGenerated
+| render timechart
+
+//Most common IP sign ins
+SigninLogs
+| summarize UserCount=count()by IPAddress
+
+//User Authentications
+SigninLogs
+| where UserPrincipalName == "x"
+| summarize count() by UserPrincipalName, IPAddress, ResultType, ResultDescription, Location
+
+//User Details
+IdentityInfo
+| where AccountDisplayName == "x"
+| project AccountDisplayName, AccountDomain, AssignedRoles, AccountCreationTime, DeletedDateTime, Department, IsMFARegistered, IsAccountEnabled, Country, RelatedAccounts, ServicePrincipals, JobTitle
+
+//Email Search
+OfficeActivity
+| extend Attachments_ = tostring(parse_json(AffectedItems)[0].Attachments)
+| extend Subject_ = tostring(parse_json(AffectedItems)[0].Subject)
+| where OfficeWorkload == "Exchange" and UserId == "x"
+| project TimeGenerated, Operation, Subject_, Attachments_, ResultStatus, UserId, ClientIP
+| sort by TimeGenerated desc
+
+//Hash Search
+CommonSecurityLog
+| where FileHash == "x"
+| project TimeGenerated, Computer, DestinationPort, DestinationIP, SourceTranslatedPort, SourceTranslatedAddress, MaliciousIP, ThreatSeverity, ThreatDescription, ThreatConfidence, Activity
+| sort by TimeGenerated desc
+
+//Network Traffic
+CommonSecurityLog
+| where SourceIP == "x" or DestinationIP == "x"
+
+//Malicious Application Detected
+CommonSecurityLog
+| where DeviceVendor == "Fortinet"
+| where DeviceAction == "accept"
+| extend additional_fields = split(AdditionalExtensions, ";")
+| where additional_fields[22] == "ad.apprisk=high" or additional_fields[22] == "ad.apprisk=critical"
+| summarize sessions=count() by category = tostring(additional_fields[21]), application = (tostring(additional_fields[20]))
+| sort by sessions
+
+//Malicious IP Detected
+CommonSecurityLog
+| where DeviceVendor == "Fortinet"
+| where DeviceAction != "deny"
+| distinct DestinationIP
+| project DestinationIP
+//compare if any destination IP matches the Threat Intelligence IP database
+| join kind = inner (
+    ThreatIntelligenceIndicator
+    | where NetworkIP != ''
+) on $left.DestinationIP == $right.NetworkIP
+| project-rename Source_IP = DestinationIP
+| project-rename Malicious_IP = NetworkIP
+| project TimeGenerated, Source_IP, ConfidenceScore, ThreatType, Malicious_IP, AdditionalInformation
+
+//Malicious DNS
+CommonSecurityLog
+| where DeviceVendor == "Fortinet"
+| where DeviceAction != "deny"
+| distinct DestinationHostName
+| project DestinationHostName
+//compare if any destination domain name matches the Threat Intelligence database
+| join kind = inner (
+    ThreatIntelligenceIndicator
+    | where DomainName != ''
+) on $left.DestinationHostName == $right.DomainName
+
+//Malicious LAN to WAN Traffic
+CommonSecurityLog
+| where DeviceVendor == "Fortinet"
+| where isnotempty(IndicatorThreatType)
+| where isempty(DestinationHostName)
+| where DeviceOutboundInterface isnotempty(DeviceOutboundInterface)
+| where DeviceAction != "deny" and DeviceAction != "close" and DeviceAction != "blocked"
+| mv-expand todynamic(IndicatorThreatType)
+| where ReportReferenceLink has "?tags="
+| extend ReportReferenceLink=split(ReportReferenceLink,"=",1)
+| mv-expand ReportReferenceLink to typeof(string)
+| extend MalwareType=split(ReportReferenceLink, "&")
+| mv-expand MalwareType to typeof(string)
+| where MalwareType <> "languageCode"
+| extend identified_application = split(AdditionalExtensions, ";")
+| project TimeGenerated, IndicatorThreatType, ApplicationProtocol, SourceIP, SourcePort, Message, identified_application[23], identified_application[21], DeviceOutboundInterface, ThreatConfidence, MalwareType, MaliciousIPCountry, DestinationIP, DestinationPort, DeviceAction, Activity
+| order by TimeGenerated
+
+//TOR Traffic
+let tor_exit_nodes = materialize (
+ (externaldata(exit_node: string ) [@"https://raw.githubusercontent.com/SecOps-Institute/Tor-IP-Addresses/master/tor-exit-nodes.lst"]
+with (format="txt"))
+| project exit_node
+| summarize by exit_node);
+search in (CommonSecurityLog)
+| where DeviceVendor == "Fortinet"
+TimeGenerated > ago(30d)
+| extend additional_fields = split(AdditionalExtensions, ";")
+| where SourceIP in(tor_exit_nodes)
+| where SimplifiedDeviceAction != "close"
+| where SimplifiedDeviceAction != "Deny"
+| project $table, TimeGenerated, DeviceOutboundInterface, SourceIP, SourcePort, DestinationIP, DestinationPort, Activity, DeviceAction
+| sort by TimeGenerated
+
+//Correlate user incidents
+union SecurityEvent, SecurityIncident, SecurityAlert
+| find "x" or "x"
+| sort by TimeGenerated
+
+//User password changes
+let action = dynamic(["change", "changed", "reset"]);
+let pWord = dynamic(["password", "credentials"]);
+SecurityEvent
+| where Account contains "x"
+| where EventID in ("4723", "4724")
+
+// Root account usage or root like permissions
+let query_filter=datatable(query: string) [
+    "omsagent", "failure", "cron:session", "sudo:session", "COMMAND=", "failed", "invalid", "reset", "disconnected"
+];
+Syslog
+| where TimeGenerated > ago(30min)
+| where SourceSystem == "Linux" 
+| where Facility in ("authpriv", "auth") 
+// Ideally there would be an action/status field with success/failure here, but this is all I can do.
+| where not(SyslogMessage has_any(query_filter))
+| where (SyslogMessage contains "root" or SyslogMessage contains "uid=0")
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated) by Computer, Facility, SyslogMessage
+
+// Airlock repository added
+airlock_svractivities_CL
+| where TimeGenerated > ago(30min)
+| where task_s == "Repository Add" and not(user_s in ("SYSTEM","LOCAL SERVICE","NETWORK SERVICE"))
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated) by user_s, description_s
+
+// Palo Alto Firewall Generic CobaltStrike Component Detected
+// DeviceEventClassID <-> signature
+// could create a similar detection looking for critical or high events instead of specific signature with:
+// LogSeverity: 
+// "5" = Critical
+// "4" = High
+CommonSecurityLog
+| where TimeGenerated > ago(30min)
+// Appears to be a typo in DeviceVendor in CCX Sentinel, so this will most likely be "Palo Alto Networks" on a customer stack
+| where Activity == "THREAT" and DeviceVendor == "Palo AltoNetworks" and DeviceEventClassID contains "cobalt" 
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated) by Computer, SourceIP, DestinationIP, DeviceEventClassID, SourceUserName // User column depends on data
+
+// Airlock enforced block on file
+airlock_exechistories_CL
+| where TimeGenerated > ago(30min)
+| where type_d == "1"
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated) by username_s, hostname_s, netdomain_s, filename_s
+
+// Users Attempting To Auth Using Explicit Credentials
+SecurityEvent
+| where TimeGenerated > ago(30min)
+| where EventID == "4648" and not(TargetUserName endswith "$" or TargetUserName == "-" and SubjectUserName endswith "$")
+| summarize unique_accounts=dcount(TargetUserName), user=make_list(TargetUserName), orig_host=make_list(Computer), src=make_list(IpAddress), dest=make_list(TargetInfo) by TimeGenerated, Computer, SubjectUserName
+| summarize comp_avg=avg(unique_accounts), comp_std=stdev(unique_accounts) by Computer, unique_accounts, SubjectUserName, tostring(src), tostring(dest), tostring(user)
+| extend upperBound=(comp_avg + comp_std * 3)
+| extend isOutlier=iff(unique_accounts > 10 and unique_accounts >= upperBound, 1, 0)
+| where isOutlier == "1"
+| project Computer, SubjectUserName, comp_avg, comp_std, dest, isOutlier, user, unique_accounts, upperBound
+
+// Puff puff pass the hash
+SecurityEvent
+| where TimeGenerated > ago(30min)
+| where EventID == "4624" LogonType == "9" and LogonProcessName == "seclogo" and AuthenticationPackageName == "Negotiate"
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated), user=make_list(TargetAccount), make_list(IpAddress) by EventID, LogonType, AuthenticationPackageName, LogonProcessName
+
+// NTLM Relay Attack (might be sketchy... need attack data to test)
+// Also found this.... https://github.com/Cyb3r-Monk/Threat-Hunting-and-Detection/blob/main/Credential%20Access/Potentially%20Relayed%20NTLM%20Authentication%20-%20MS%20Sentinel.md
+SecurityEvent
+| where TimeGenerated > ago(30min)
+| where EventID == "4624"
+| where AccountType == "User"
+| where AuthenticationPackageName == "NTLM"
+| where LogonType == 3
+| where ElevatedToken <> '%%1843'
+| where isnotempty(parse_ipv4(IpAddress))
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated), ip_count=dcount(IpAddress), unique_ip=make_set(IpAddress) by WorkstationName
+| where ip_count >= 2
+
+// Check auth logs from non cloud trusted devices, and non trusted network locations and run against recent mail sync events.
+let timeframe = 10m;
+let lookback = 12h;
+let auth_event = 
+SigninLogs
+| where TimeGenerated > ago(lookback+timeframe)
+| where ResultType == "0" and NetworkLocationDetails == "[]"
+| summarize FirstEvent=min(TimeGenerated), LastEvent=max(TimeGenerated), unique_trustType=make_list(tostring(DeviceDetail.trustType), 10) by UserPrincipalName, IPAddress
+| where not(unique_trustType has_any ("Azure AD registered", "Hybrid Azure AD joined", "Azure AD joined"))
+| project authTime = LastEvent, UserPrincipalName, IPAddress;
+let mail_sync = 
+OfficeActivity 
+| where TimeGenerated > ago(timeframe) 
+| where ResultStatus == "Succeeded" and OfficeWorkload == "Exchange"
+| mv-expand parse_json(OperationProperties)
+| mv-expand parse_json(Item)
+| where OperationProperties.Value == "Sync" and isnotnull(Item.ParentFolder.Name)
+| extend UserPrincipalName = UserId
+| extend IPAddress = ClientIP
+| project eventTime = TimeGenerated, UserPrincipalName, IPAddress, emailparentFolder = Item.ParentFolder.Name, operation = OperationProperties.Value;
+auth_event | join kind= inner (mail_sync) on UserPrincipalName
+| where eventTime - authTime < lookback
+| where tolong(eventTime - authTime) >= 0
+| project TimeDelta = eventTime - authTime, authTime, UserPrincipalName, IPAddress, emailparentFolder, operation, eventTime
+| extend timestamp = authTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+
+// Conditional Access Policy Change
+let timeframe = 30m;
+AuditLogs
+| where TimeGenerated > ago(timeframe)
+| where OperationName in ("Add conditional access policy", "Update conditional access policy", "Delete conditional access policy") and Result == "success"
+| project OperationName, UserPrincipalName = InitiatedBy.user.userPrincipalName, PolicyName = TargetResources[0].displayName
+
+// Alert User list generation
+SecurityAlert
+| where SystemAlertId contains "x" // Input Alert ID here
+| extend properties = parse_json(ExtendedProperties)
+| extend User_list = split(tostring(properties["Users"]), ",")
+| project User_list
+| where isnotempty(User_list)
+| summarize make_set(User_list)
+| mv-expand set_User_list
+| where isnotempty(set_User_list)
+| project DisplayName = tostring(set_User_list)
+| union (SecurityAlert
+| extend Entities = parse_json(Entities)
+| project Entities
+| mv-expand Entities
+| extend EType = tostring(Entities.Type)
+| where EType == "account"
+| extend DisplayName = tostring(Entities.DisplayName)
+| distinct DisplayName)
+| order by DisplayName
+| summarize tostring(mylist = make_list(DisplayName))
+| project mylist2 = substring(mylist, 1, strlen(mylist)-2)    // format for signinlogs
+//| project mylist3 = replace_string(mylist2,',',' or ')      // format for IOC checks
+
+// Alert IP list generation
+SecurityAlert
+| where SystemAlertId contains "x" // Input Alert ID here
+| extend properties = parse_json(ExtendedProperties)
+| extend IP_list = split(tostring(properties["IP Addresses"]), ",")
+| project IP_list
+| where isnotempty(IP_list)
+| summarize make_set(IP_list)
+| mv-expand set_IP_list
+| where isnotempty(set_IP_list)
+| project DisplayName = tostring(set_IP_list)
+| union (SecurityAlert
+| extend Entities = parse_json(Entities)
+| project Entities
+| mv-expand Entities
+| extend EType = tostring(Entities.Type)
+| where EType == "ip"
+| extend IP = tostring(Entities.Address)
+| distinct IP)
+| order by IP
+| summarize tostring(mylist = make_list(IP))
+| project mylist2 = substring(mylist, 1, strlen(mylist)-2)    // Format for signinlogs
+//| project mylist3 = replace_string(mylist2,',',' or ')      // Format for IOC checks
+//| project mylist3 = replace_string(mylist2,',',' ')      // Format for OSINT checks (alternative part 1)
+//| project mylist3 = replace_string(mylist3,'"','')      // Format for OSINT checks (alternative part 2)
+//| project mylist3 = replace_string(mylist2,'"','')          // Format for OSINT checks (part 1)
+//| mv-expand split(mylist3, ",") to typeof(string)           // Format for OSINT checks (part 2)
+
+//User Security Event Activity search
+SecurityEvent
+| where Account has_any ("x")
+| summarize count() by Activity
+
+//Userprincipalname from account name / surname
+BehaviorAnalytics
+| where UserName has_any ("x")
+| summarize count() by UserPrincipalName
+
+//Identity info for users
+IdentityInfo
+| where AccountUPN has_any ("x")
+| distinct tostring(AssignedRoles), JobTitle 
+
+//CAP changes
+SigninLogs
+| where TimeGenerated > ago(30d)
+| extend CA = parse_json(ConditionalAccessPolicies)
+| mv-expand bagexpansion=array CA
+| evaluate bag_unpack(CA)
+| extend
+    ['CA Outcome']=tostring(column_ifexists('result', "")),
+    ['CA Policy Name'] = column_ifexists('displayName', "")
+| evaluate pivot(['CA Outcome'], count(), ['CA Policy Name'])
+
+//User's failing CAP
+SigninLogs
+| where TimeGenerated > ago (30d)
+| project TimeGenerated, ConditionalAccessPolicies, UserPrincipalName
+| mv-expand ConditionalAccessPolicies
+| extend CAResult = tostring(ConditionalAccessPolicies.result)
+| extend CAPolicyName = tostring(ConditionalAccessPolicies.displayName)
+| where CAResult == "failure"
+| summarize
+    ['Total Conditional Access Failures']=count(),
+    ['Distinct Policy Failure Count']=dcount(CAPolicyName),
+    ['Policy Names']=make_set(CAPolicyName)
+    by UserPrincipalName
+| sort by ['Distinct Policy Failure Count'] desc 
+
+//What CAP a user failed
+SigninLogs
+| where UserPrincipalName contains "x"
+| mvexpand ConditionalAccessPolicies
+| where ConditionalAccessPolicies["result"] == "failure"
+| project TimeGenerated, Identity, UserPrincipalName, AzureADApplication = AppDisplayName, ClientApplication = ClientAppUsed, ClientBrowser = DeviceDetail.browser, ClientOperatingSystem = DeviceDetail.operatingSystem, ClientIPAddress = IPAddress , ClientUserAgent = UserAgent , ConditionalAccessPolicyName = ConditionalAccessPolicies["displayName"], ConditionalAccessPolicyID = ConditionalAccessPolicies["id"], ConditionalAccessPolicies["result"]
+
+//what logs are available?
+find "x"
+| summarize count() by source_
+
+//Who changed a users password?
+AuditLogs 
+| extend Initiator = InitiatedBy.user.userPrincipalName
+| extend Target = tostring(parse_json(TargetResources)[0].userPrincipalName)
+| where OperationName == "Change user password"
+| distinct tostring(Initiator), tostring(Target)
+| where Initiator != Target
+| sort by Initiator
+
+//Device logons
+DeviceLogonEvents
+| where AccountName contains "x"
+| summarize count() by ActionType, InitiatingProcessAccountName, LogonType
+
+//User made admin / added to group / added as member
+let timerange=7d;
+AuditLogs
+| where UserAdded contains "x"
+| where TimeGenerated > ago (timerange)
+| where OperationName has_any ("member", "group", "owner")
+| extend Type = tostring(TargetResources[0].type)
+| where Type == "User"
+| extend ['Group Name'] = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue)))
+| extend UserAdded = tostring(TargetResources[0].userPrincipalName)
+| where isnotempty(UserAdded)
+
+//Caller service principal name?
+AADServicePrincipalSignInLogs
+| where ServicePrincipalId in~("x")
+| summarize count() by ServicePrincipalName, ResourceServicePrincipalId
+
+//Serviceprincipal signins
+AADServicePrincipalSignInLogs
+| where ServicePrincipalId contains "x"
+| summarize count() by ResultType, IPAddress, AuthenticationProcessingDetails
+
+//Convert username to UPN
+IdentityInfo
+| where AccountName in~("x")
+| distinct AccountUPN
+| summarize tostring(mylist = make_list(AccountUPN))
+| project mylist2 = substring(mylist, 1, strlen(mylist)-2)
+
+//User role changes
+IdentityInfo
+| where TimeGenerated > ago(7d)
+| where AccountUPN == "x"
+| mv-expand AssignedRoles
+| summarize count() by tostring(AssignedRoles), TimeGenerated
+| render areachart 
+
+//Password reset across multiple resources
+let action = dynamic(["change ", "changed ", "reset "]);
+let pWord = dynamic(["password ", "credentials "]);
+(union isfuzzy=true
+    (SecurityEvent
+    | where EventID in (4723, 4724)
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(Activity),
+        ActionCount = count()
+        by
+        Resource = Computer,
+        OperationName = strcat("TargetAccount: ", TargetUserName),
+        UserId = Account,
+        Type
+    ),
+    (WindowsEvent
+    | where EventID in (4723, 4724)
+    | extend Activity=iff(EventID == '4723', "4723 - An attempt was made to change an account", "4724 - An attempt was made to reset an account")
+    | extend TargetUserName = tostring(EventData.TargetUserName)
+    | extend Account =  strcat(tostring(EventData.SubjectDomainName), "\\", tostring(EventData.SubjectUserName))
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(Activity),
+        ActionCount = count()
+        by
+        Resource = Computer,
+        OperationName = strcat("TargetAccount: ", TargetUserName),
+        UserId = Account,
+        Type
+    ),
+    (AuditLogs
+    | where OperationName has_any (pWord) and OperationName has_any (action)
+    | extend InitiatedBy = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName) 
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName) 
+    | where ResultDescription != "None" 
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(ResultDescription),
+        CorrelationIds = makeset(CorrelationId),
+        ActionCount = count()
+        by
+        OperationName = strcat(Category, " - ", OperationName, " - ", Result),
+        Resource,
+        UserId = TargetUserPrincipalName,
+        Type
+    | extend ResultDescriptions = tostring(ResultDescriptions)
+    ),
+    (OfficeActivity
+    | where (ExtendedProperties has_any (pWord) or ModifiedProperties has_any (pWord)) and (ExtendedProperties has_any (action) or ModifiedProperties has_any (action))
+    | extend ResultDescriptions = case(
+        OfficeWorkload =~ "AzureActiveDirectory", tostring(ExtendedProperties),
+        OfficeWorkload has_any ("Exchange", "OneDrive"), OfficeObjectId,
+        RecordType) 
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(ResultDescriptions),
+        ActionCount = count()
+        by
+        Resource = OfficeWorkload,
+        OperationName = strcat(Operation, " - ", ResultStatus),
+        IPAddress = ClientIP,
+        UserId,
+        Type
+    ),
+    (Syslog
+    | where SyslogMessage has_any (pWord) and SyslogMessage has_any (action)
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(SyslogMessage),
+        ActionCount = count()
+        by
+        Resource = HostName,
+        OperationName = Facility,
+        IPAddress = HostIP,
+        ProcessName,
+        Type
+    ),
+    (SigninLogs
+    | where OperationName =~ "Sign-in activity" and ResultType has_any ("50125", "50133")
+    | summarize
+        StartTimeUtc = min(TimeGenerated),
+        EndTimeUtc = max(TimeGenerated),
+        ResultDescriptions = makeset(ResultDescription),
+        CorrelationIds = makeset(CorrelationId),
+        ActionCount = count()
+        by
+        Resource,
+        OperationName = strcat(OperationName, " - ", ResultType),
+        IPAddress,
+        UserId = UserPrincipalName,
+        Type
+    )
+)
+| extend
+    timestamp = StartTimeUtc,
+    AccountCustomEntity = UserId,
+    IPCustomEntity = IPAddress
+
+// PIM elevation history
+AuditLogs
+| where OperationName contains "PIM activation"
+| where Identity contains "x"
+| summarize count() by ResultReason, TimeGenerated
+| render areachart 
+
+// Kerberoasting evidence
+let timeframe = 7d;
+let requestCountThreshold = 7;
+SecurityEvent
+| where TimeGenerated >= ago(timeframe)
+| where EventID == 4769
+| parse EventData with * 'TargetUserName">' TargetUserName '</Data>' *
+| parse EventData with * 'IpAddress">' IpAddress '</Data>' *
+| parse EventData with * 'ServiceName">' ServiceName '</Data>' *
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated),
+AttemptRequest = dcount(ServiceName) by TargetUserName, Activity, IpAddress
+| project StartTimeUtc, EndTimeUtc, TargetUserName, AttemptRequest, Activity,
+IpAddress
+| where AttemptRequest > requestCountThreshold
+| sort by StartTimeUtc desc
+
+//Sign in all IOCs
+let AlertId = "x";   // Insert the AlertId of here
+let TimeAgo = 7d;
+let LegacyAuthList = dynamic(["Authenticated SMTP", "Autodiscover", "Exchange ActiveSync", "Exchange Online PowerShell", "Exchange Web Services", "IMAP4", "MAPI over HTTP", "Outlook Anywhere", "Outlook Service", "POP3", "Reporting Web Services", "Other clients", "BAV2ROPC"]);
+union
+    ThreatIntelligenceIndicator,
+    SigninLogs,
+    AADNonInteractiveUserSignInLogs,
+    IdentityInfo
+| where TimeGenerated > ago(TimeAgo)
+| where UserPrincipalName in ((
+    SecurityAlert
+    | summarize arg_max(TimeGenerated, *) by SystemAlertId
+    | where SystemAlertId == AlertId
+    | extend Entities = parse_json(Entities)
+    | mv-expand Entities
+    | extend DisplayName = Entities.DisplayName
+    | summarize UserList = make_set(DisplayName)
+    ))
+| join kind=inner(
+    SecurityAlert
+    | where SystemAlertId == AlertId
+    | extend properties = parse_json(ExtendedProperties)
+    | extend IP_list = split(tostring(properties["IP Addresses"]), ",")
+    | project IP_list
+    | where isnotempty(IP_list)
+    | summarize make_set(IP_list)
+    | mv-expand set_IP_list
+    | where isnotempty(set_IP_list)
+    | project DisplayName = tostring(set_IP_list)
+    | union (
+        SecurityAlert
+        | extend Entities = parse_json(Entities)
+        | project Entities
+        | mv-expand Entities
+        | extend EType = tostring(Entities.Type)
+        | where EType == "ip"
+        | extend IP = tostring(Entities.Address)
+        | distinct IP))
+    on $left.NetworkIP == $right.IP
+| extend LegacyAuth = iff(UserAgent has_any(LegacyAuthList), "true", "false") // mainly to identify BAV2ROPC brute forces but figured i'd make it it's own list
+| extend ThreatIntel = iff(isempty(Description), "N/A", Description) // no idea how accurate these are, might be better to disclude this 
+| extend CompliantDevice = iff(isempty(DeviceDetail_dynamic.isCompliant) == true, (parse_json(DeviceDetail_string).isCompliant), DeviceDetail_dynamic.isCompliant)
+| extend ManagedDevice = iff(isempty(DeviceDetail_dynamic.isManaged) == true, (parse_json(DeviceDetail_string).isManaged), DeviceDetail_dynamic.isManaged)
+| extend RegisteredDevice = iff(isempty(DeviceDetail_dynamic.deviceId) == true, (parse_json(DeviceDetail_string).deviceId), DeviceDetail_dynamic.deviceId)
+| extend SecureDevice = iff(isnotempty(RegisteredDevice), (iff(isnotempty(ManagedDevice), (iff(isnotempty(CompliantDevice), "true", "false")), "false")), "false") // managed + registered + compliant = "secure"
+| extend Result = iff(isempty(ResultDescription), "success", (iff(ResultDescription == "Other", ResultType, ResultDescription))) // Merges result descriptions and codes to increase readability
+| extend LocationAnomaly = iff(isempty(LocationDetails_dynamic.state) == true, (iff(parse_json(LocationDetails_string).state != State, "true", (iff(parse_json(LocationDetails_string).state != State, "true", "false")))), "error") // checks if AD state location is the same as sign-in state, could be refined by country and filtering out CDN's but that was a bit too much work at this stage
+| summarize count()
+    by
+    UserPrincipalName,
+    Result,
+    IPAddress,
+    tostring(LocationAnomaly),
+    Location,
+    UserAgent,
+    LegacyAuth,
+    ThreatIntel,
+    tostring(CompliantDevice),
+    tostring(RegisteredDevice),
+    tostring(ManagedDevice),
+    SecureDevice
+| sort by UserPrincipalName
+
+ //Snowflake SQL Searches performed by User
+Snowflake_CL
+| where USER_NAME_s contains "x"
+| distinct QUERY_TEXT_s 
+
+// Snowflake Logons by User
+Snowflake_CL
+| where USER_NAME_s contains "x"
+| where EVENT_TYPE_s == "LOGIN"
+| summarize count() by USER_NAME_s, FIRST_AUTHENTICATION_FACTOR_s, CLIENT_IP_s, REPORTED_CLIENT_TYPE_s, IS_SUCCESS_s
