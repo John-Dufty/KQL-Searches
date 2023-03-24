@@ -1,3 +1,9 @@
+// User Office activity
+OfficeActivity
+| where UserId == "x"
+| summarize count() by Operation, OfficeObjectId
+| sort by Operation
+
 //Useragent sign-in's over time
 union SigninLogs, AADNonInteractiveUserSignInLogs
 | where UserPrincipalName == "x"
