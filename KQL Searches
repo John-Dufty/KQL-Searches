@@ -486,7 +486,7 @@ let pWord = dynamic(["password ", "credentials "]);
 // PIM elevation history
 AuditLogs
 | where OperationName contains "PIM activation"
-| where Identity contains "x"
+| where InitiatedBy contains "x"
 | summarize count() by ResultReason, TimeGenerated
 | render areachart 
 
