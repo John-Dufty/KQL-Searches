@@ -492,7 +492,8 @@ let pWord = dynamic(["password ", "credentials "]);
 // PIM elevation history
 AuditLogs
 | where OperationName contains "PIM activation"
-| where InitiatedBy contains "x"
+| extend userPrincipalName_ = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+| where userPrincipalName_ == "tor@netwealth.com.au"
 | summarize count() by ResultReason, TimeGenerated
 | render areachart 
 
