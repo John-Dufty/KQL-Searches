@@ -360,15 +360,10 @@ AuditLogs
 | extend UserAdded = tostring(TargetResources[0].userPrincipalName)
 | where isnotempty(UserAdded)
 
-//Caller service principal name?
-AADServicePrincipalSignInLogs
-| where ServicePrincipalId in~("x")
-| summarize count() by ServicePrincipalName, ResourceServicePrincipalId
-
 //Serviceprincipal signins
-AADServicePrincipalSignInLogs
-| where ServicePrincipalId contains "x"
-| summarize count() by ResultType, IPAddress, AuthenticationProcessingDetails
+union AADServicePrincipalSignInLogs, AADManagedIdentitySignInLogs
+| where ServicePrincipalId contains "f3dc942a-afe1-4caf-ba78-9941d08e9ec5"
+| summarize count() by ResultType, ResultDescription, IPAddress, AuthenticationProcessingDetails, Location
 
 //Convert username to UPN
 IdentityInfo
