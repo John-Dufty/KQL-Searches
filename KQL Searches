@@ -362,8 +362,8 @@ AuditLogs
 
 //Serviceprincipal signins
 union AADServicePrincipalSignInLogs, AADManagedIdentitySignInLogs
-| where ServicePrincipalId contains "x"
-| summarize count() by ResultType, ResultDescription, IPAddress, AuthenticationProcessingDetails, Location
+| where ServicePrincipalId contains "f3dc942a-afe1-4caf-ba78-9941d08e9ec5"
+| summarize count() by ServicePrincipalName, ResultType, ResultDescription, IPAddress, Location
 
 //Convert username to UPN
 IdentityInfo
