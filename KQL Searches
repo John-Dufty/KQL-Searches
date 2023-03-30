@@ -577,8 +577,16 @@ Snowflake_CL
 | where USER_NAME_s contains "x"
 | distinct QUERY_TEXT_s 
 
-// Snowflake Logons by User
+//Snowflake Logons by User
 Snowflake_CL
 | where USER_NAME_s contains "x"
 | where EVENT_TYPE_s == "LOGIN"
 | summarize count() by USER_NAME_s, FIRST_AUTHENTICATION_FACTOR_s, CLIENT_IP_s, REPORTED_CLIENT_TYPE_s, IS_SUCCESS_s
+
+//User updated
+AuditLogs
+| where OperationName == "Update user"
+| extend userPrincipalName_ = tostring(TargetResources[0].userPrincipalName)
+| mv-expand modified = TargetResources[0].modifiedProperties
+| where userPrincipalName_ in~("x")
+| summarize count() by userPrincipalName_, tostring(modified)
