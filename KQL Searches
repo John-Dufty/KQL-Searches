@@ -1,3 +1,10 @@
+// Device ID over time
+SigninLogs
+| where UserPrincipalName contains "x"
+| extend deviceId_ = tostring(DeviceDetail.deviceId)
+| summarize count() by deviceId_, TimeGenerated
+| render areachart 
+
 // User Office activity
 OfficeActivity
 | where UserId == "x"
