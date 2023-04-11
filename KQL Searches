@@ -1,3 +1,12 @@
+// Users performing mass downloads
+DeviceFileEvents
+| where ActionType == "FileModified"
+| where isnotempty(FileOriginUrl)
+| summarize sum(FileSize) by bin(TimeGenerated, 10m), InitiatingProcessAccountUpn
+| extend TotalSize_GB = sum_FileSize/1073741824.0
+| project InitiatingProcessAccountUpn, TotalSize_GB
+| where TotalSize_GB > 5
+
 // Device ID over time
 SigninLogs
 | where UserPrincipalName contains "x"
