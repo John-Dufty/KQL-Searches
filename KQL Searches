@@ -1,3 +1,11 @@
+// Check log ingestion
+find where TimeGenerated > ago(15m) // change the time to suit the AR
+| distinct source_
+| join kind = rightanti (
+    ((_GetWatchlist('NearRealTimeLogs') //Change the watchlist to suit the AR
+    | project source_)))
+    on source_
+
 // Device Sign-ins
 DeviceLogonEvents
 | where DeviceName == "vmcl02"
