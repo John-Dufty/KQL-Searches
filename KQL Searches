@@ -1,3 +1,9 @@
+// Device Sign-ins
+DeviceLogonEvents
+| where DeviceName == "vmcl02"
+| summarize count() by ActionType, AccountName, RemoteIP
+| sort by ActionType
+
 // Users performing mass downloads
 DeviceFileEvents
 | where ActionType == "FileModified"
