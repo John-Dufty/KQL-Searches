@@ -1,3 +1,12 @@
+// Alert user list generation
+SecurityAlert
+| summarize arg_max(TimeGenerated, *) by SystemAlertId 
+| where SystemAlertId in("ce4e0b27-4f34-6076-988b-42dbcea2f71b")
+| mv-expand todynamic(Entities)
+| mv-expand Entities.DisplayName
+| summarize tostring(mylist = make_list(Entities.DisplayName))
+| project mylist2 = substring(mylist, 1, strlen(mylist)-2)
+
 // PIM elevation role history
 AuditLogs
 | where OperationName contains "PIM activation"
