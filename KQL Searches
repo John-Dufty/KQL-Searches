@@ -26,8 +26,8 @@ find where TimeGenerated > ago(15m) // change the time to suit the AR
 
 // Device Sign-ins
 DeviceLogonEvents
-| where DeviceName == "vmcl02"
-| summarize count() by ActionType, AccountName, RemoteIP
+| where DeviceName contains "OD-LPTP-473"
+| summarize count() by ActionType, AccountName, RemoteIP, LogonType
 | sort by ActionType
 
 // Users performing mass downloads
