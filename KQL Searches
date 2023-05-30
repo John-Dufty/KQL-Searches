@@ -3,7 +3,8 @@ AuditLogs
 | mv-expand TargetResources
 | extend Target = tostring(TargetResources.displayName)
 | where Target == "x"
-| extend Initiator = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+| mv-expand InitiatedBy
+| extend Initiator = tostring(TargetResources.displayName)
 | summarize count() by Initiator, ResultDescription, OperationName, Target
 
 // Audited action initiated by user
@@ -11,14 +12,14 @@ AuditLogs
 | mv-expand TargetResources
 | extend Target = tostring(TargetResources.displayName)
 | mv-expand InitiatedBy
-| extend Initiator = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+| extend Initiator = tostring(TargetResources.displayName)
 | where Initiator == "x"
 | summarize count() by Initiator, ResultDescription, OperationName, Target
 
 // Alert user list generation
 SecurityAlert
 | summarize arg_max(TimeGenerated, *) by SystemAlertId 
-| where SystemAlertId in("ce4e0b27-4f34-6076-988b-42dbcea2f71b")
+| where SystemAlertId in("x")
 | mv-expand todynamic(Entities)
 | mv-expand Entities.DisplayName
 | summarize tostring(mylist = make_list(Entities.DisplayName))
@@ -28,7 +29,7 @@ SecurityAlert
 AuditLogs
 | where OperationName contains "PIM activation"
 | extend userPrincipalName_ = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-| where userPrincipalName_ contains "DMcCullough"
+| where userPrincipalName_ contains "x"
 | extend displayName_ = tostring(TargetResources[0].displayName)
 | summarize count() by displayName_, TimeGenerated
 | render areachart 
@@ -43,7 +44,7 @@ find where TimeGenerated > ago(15m) // change the time to suit the AR
 
 // Device Sign-ins
 DeviceLogonEvents
-| where DeviceName contains "OD-LPTP-473"
+| where DeviceName contains "x"
 | summarize count() by ActionType, AccountName, RemoteIP, LogonType
 | sort by ActionType
 
