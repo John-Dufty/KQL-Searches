@@ -1,3 +1,11 @@
+// Multiple atypical travel alerts
+let threshold = 3;
+SecurityAlert
+| where AlertName == "Atypical travel"
+| extend AadUserId_ = tostring(parse_json(Entities)[0].AadUserId)
+| summarize UserCount = count() by AadUserId_
+| where UserCount > threshold
+
 // Audited action initiated against user
 AuditLogs
 | mv-expand TargetResources
