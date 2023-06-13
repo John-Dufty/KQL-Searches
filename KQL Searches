@@ -1,3 +1,28 @@
+// Resets across domain by user
+union (
+    Syslog 
+    | where Facility in ("auth", "authpriv")
+    | find "change" or "password" or "passwd" or "change" or "changed"), (  
+    SecurityEvent 
+    | where EventID in ("4723", "4724")), (
+    AuditLogs
+    | where ActivityDisplayName contains "password"), (
+    OfficeActivity  
+    | find "password"
+    | find "reset")
+| project-away
+    Level,
+    ResourceId,
+    OperationVersion,
+    ResultSignature,
+    CorrelationId,
+    Resource,
+    ResourceGroup,
+    AdditionalDetails,
+    Id
+| find "x"
+
+
 // Multiple atypical travel alerts
 let threshold = 3;
 SecurityAlert
