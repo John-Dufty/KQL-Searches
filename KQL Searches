@@ -22,13 +22,17 @@ union (
     Id
 | find "x"
 
-
 // Multiple atypical travel alerts
 let threshold = 3;
 SecurityAlert
 | where AlertName == "Atypical travel"
 | extend AadUserId_ = tostring(parse_json(Entities)[0].AadUserId)
-| summarize UserCount = count() by AadUserId_
+| join kind=inner (
+    SigninLogs
+    | summarize arg_max(TimeGenerated, *) by UserId
+    | project UserId, UPN = tostring(UserPrincipalName)
+) on $left.AadUserId_ == $right.UserId
+| summarize UserCount = count() by UPN
 | where UserCount > threshold
 
 // Audited action initiated against user
