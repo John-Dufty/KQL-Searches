@@ -7,8 +7,10 @@ SecurityAlert
 | extend Phishlink = Url
 | join kind=inner (
     UrlClickEvents
-) on $left.Phishlink == $right.Url
+    | extend Phishclick = Url
+) on $left.Phishlink == $right.Phishclick
 | where IsClickedThrough == "true"
+| distinct Phishclick
 
 // Resets across domain by user
 union (
