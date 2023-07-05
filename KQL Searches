@@ -1,6 +1,14 @@
-// URL clicks for potential phish domains
-UrlClickEvents
-|where Url contains ("x")
+SecurityAlert
+| where AlertName == "Email reported by user as malware or phish"
+| extend P2SenderDomain_ = tostring(parse_json(Entities)[1].P2SenderDomain)
+| join kind=inner (
+    EmailUrlInfo
+) on $left.P2SenderDomain_ == $right.UrlDomain
+| distinct Url
+| join kind=inner (
+    UrlClickEvents
+) on $left.Url == $right.Url
+| where IsClickedThrough == "true"
 
 // Resets across domain by user
 union (
