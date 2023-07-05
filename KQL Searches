@@ -1,3 +1,7 @@
+// URL clicks for potential phish domains
+UrlClickEvents
+|where Url contains ("x")
+
 // Resets across domain by user
 union (
     Syslog 
