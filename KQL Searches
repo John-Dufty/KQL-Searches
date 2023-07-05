@@ -4,10 +4,10 @@ SecurityAlert
 | join kind=inner (
     EmailUrlInfo
 ) on $left.P2SenderDomain_ == $right.UrlDomain
-| distinct Url
+| extend Phishlink = Url
 | join kind=inner (
     UrlClickEvents
-) on $left.Url == $right.Url
+) on $left.Phishlink == $right.Url
 | where IsClickedThrough == "true"
 
 // Resets across domain by user
