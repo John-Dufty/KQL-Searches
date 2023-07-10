@@ -1,3 +1,11 @@
+// App modifications over time
+AuditLogs
+| where displayName_ == "AwsApiGatewayTest"
+| extend displayName_ = tostring(TargetResources[0].displayName)
+| summarize count() by OperationName, TimeGenerated
+| render areachart
+
+// URL's clicked that had the sending email reported for phishing
 SecurityAlert
 | where AlertName == "Email reported by user as malware or phish"
 | extend P2SenderDomain_ = tostring(parse_json(Entities)[1].P2SenderDomain)
