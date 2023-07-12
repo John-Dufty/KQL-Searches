@@ -1,6 +1,6 @@
 // App modifications over time
 AuditLogs
-| where displayName_ == "AwsApiGatewayTest"
+| where displayName_ == "x"
 | extend displayName_ = tostring(TargetResources[0].displayName)
 | summarize count() by OperationName, TimeGenerated
 | render areachart
