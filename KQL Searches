@@ -8,7 +8,9 @@ AuditLogs
 // URL's clicked that had the sending email reported for phishing
 SecurityAlert
 | where AlertName == "Email reported by user as malware or phish"
-| extend P2SenderDomain_ = tostring(parse_json(Entities)[1].P2SenderDomain)
+| extend EntitiesList = parse_json(Entities)
+| mv-expand entity = EntitiesList
+| extend P2SenderDomain_ = tostring(entity.P2SenderDomain)
 | join kind=inner (
     EmailUrlInfo
 ) on $left.P2SenderDomain_ == $right.UrlDomain
@@ -48,7 +50,9 @@ union (
 let threshold = 3;
 SecurityAlert
 | where AlertName == "Atypical travel"
-| extend AadUserId_ = tostring(parse_json(Entities)[0].AadUserId)
+| extend EntitiesList = parse_json(Entities)
+| mv-expand entity = EntitiesList
+| extend AadUserId_ = tostring(entity.AadUserId)
 | join kind=inner (
     SigninLogs
     | summarize arg_max(TimeGenerated, *) by UserId
