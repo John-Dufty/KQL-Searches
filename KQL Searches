@@ -1,3 +1,15 @@
+// Secretget event
+AzureDiagnostics
+| where identity_claim_upn_s contains "adm_rpunjwani"
+| where OperationName in ("SecretGet", "VaultG
+
+// User Signins check
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName == "x"
+| extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic),DeviceDetail_string)
+| summarize count()by ResultType, ResultDescription, Location, DeviceDetails, IPAddress, UserPrincipalName, Type
+| sort by UserPrincipalName
+
 // App modifications over time
 AuditLogs
 | where displayName_ == "x"
