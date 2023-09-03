@@ -13,7 +13,7 @@ AzureDiagnostics
 
 // User Signins check
 union SigninLogs, AADNonInteractiveUserSignInLogs
-//| where UserPrincipalName in~("x")
+| where UserPrincipalName in~("x")
 | extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic.deviceId), DeviceDetail_string)
 | extend DeviceID = tostring(parse_json(DeviceDetails).deviceId)
 | extend LocationDetails = strcat(tostring(LocationDetails_dynamic.deviceId), LocationDetails_string)
