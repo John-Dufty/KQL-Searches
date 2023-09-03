@@ -1,14 +1,25 @@
+AADUserRiskEvents
+| where UserPrincipalName in~("x")
+| extend unfamiliarFeatures = iff(tostring(AdditionalInfo[0].Key) == "riskReasons", tostring(AdditionalInfo[0].Value), "")
+| project-rename NetworkIP=IpAddress
+| join kind=leftouter (ThreatIntelligenceIndicator 
+| project NetworkIP, Description) on NetworkIP
+| project UserPrincipalName, IPAddress=NetworkIP, unfamiliarFeatures, ThreatIntel=Description, RiskDetail, RiskEventType
+
 // Secretget event
 AzureDiagnostics
-| where identity_claim_upn_s contains "adm_rpunjwani"
-| where OperationName in ("SecretGet", "VaultG
+| where identity_claim_upn_s contains "x"
+| where OperationName in ("SecretGet", "VaultGet")
 
 // User Signins check
 union SigninLogs, AADNonInteractiveUserSignInLogs
-| where UserPrincipalName == "x"
-| extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic),DeviceDetail_string)
-| summarize count()by ResultType, ResultDescription, Location, DeviceDetails, IPAddress, UserPrincipalName, Type
-| sort by UserPrincipalName
+//| where UserPrincipalName in~("x")
+| extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic.deviceId), DeviceDetail_string)
+| extend DeviceID = tostring(parse_json(DeviceDetails).deviceId)
+| extend LocationDetails = strcat(tostring(LocationDetails_dynamic.deviceId), LocationDetails_string)
+| extend City = tostring(parse_json(LocationDetails).city)
+| summarize count()by UserPrincipalName, ResultType, IPAddress, UserAgent, LocationDetails, DeviceID
+| sort by UserPrincipalName, IPAddress
 
 // App modifications over time
 AuditLogs
