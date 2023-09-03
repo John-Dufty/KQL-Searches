@@ -18,7 +18,8 @@ union SigninLogs, AADNonInteractiveUserSignInLogs
 | extend DeviceID = tostring(parse_json(DeviceDetails).deviceId)
 | extend LocationDetails = strcat(tostring(LocationDetails_dynamic.deviceId), LocationDetails_string)
 | extend City = tostring(parse_json(LocationDetails).city)
-| summarize count()by UserPrincipalName, ResultType, IPAddress, UserAgent, LocationDetails, DeviceID
+| extend Location = strcat(Location, iff(isempty(City), "", strcat(" - ", City)))
+| summarize count() by UserPrincipalName, ResultType, IPAddress, UserAgent, Location, DeviceID
 | sort by UserPrincipalName, IPAddress
 
 // App modifications over time
