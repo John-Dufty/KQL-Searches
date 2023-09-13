@@ -1,3 +1,4 @@
+// User risk events over a one week period
 AADUserRiskEvents
 | where UserPrincipalName in~("x")
 | extend unfamiliarFeatures = iff(tostring(AdditionalInfo[0].Key) == "riskReasons", tostring(AdditionalInfo[0].Value), "")
@@ -11,15 +12,16 @@ AzureDiagnostics
 | where identity_claim_upn_s contains "x"
 | where OperationName in ("SecretGet", "VaultGet")
 
-// User Signins check
+// User signins check over a one week period
 union SigninLogs, AADNonInteractiveUserSignInLogs
 | where UserPrincipalName in~("x")
 | extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic.deviceId), DeviceDetail_string)
 | extend DeviceID = tostring(parse_json(DeviceDetails).deviceId)
 | extend LocationDetails = strcat(tostring(LocationDetails_dynamic.deviceId), LocationDetails_string)
 | extend City = tostring(parse_json(LocationDetails).city)
+| extend OperatingSystem = tostring(parse_json(DeviceDetails).operatingSystem)
 | extend Location = strcat(Location, iff(isempty(City), "", strcat(" - ", City)))
-| summarize count() by UserPrincipalName, ResultType, IPAddress, UserAgent, Location, DeviceID
+| summarize count() by UserPrincipalName, ResultType, IPAddress, UserAgent, Location, DeviceID, OperatingSystem
 | sort by UserPrincipalName, IPAddress
 
 // App modifications over time
