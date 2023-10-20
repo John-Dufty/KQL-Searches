@@ -1,3 +1,40 @@
+// Authentication logs via SMS search
+Auth0Logs_CL
+| find "x"
+| extend client_id_ = tostring(parse_json(tostring(parse_json(value_s).data)).client_id)
+| extend client_name_ = tostring(parse_json(tostring(parse_json(value_s).data)).client_name)
+| extend description_ = tostring(parse_json(tostring(parse_json(value_s).data)).description)
+| extend email_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).body)).user_metadata)).email)
+| extend existing_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).body)).user_metadata)).existing)
+| extend phone_number_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).body)).user_metadata)).phone_number)
+| extend user_id_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).body)).user_metadata)).user_id)
+| extend user_type_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).body)).user_metadata)).user_type)
+| extend ip_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).ip)
+| extend path_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).path)
+| extend query_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).query)))
+| extend userAgent_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).request)).userAgent)
+| extend last_ip_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).last_ip)
+| extend last_login_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).last_login)
+| extend logins_count_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).logins_count)
+| extend name_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).name)
+| extend nickname_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).nickname)
+| extend phone_number_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).phone_number)
+| extend phone_verified_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).phone_verified)
+| extend picture_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).picture)
+| extend user_id_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).body)).user_id)
+| extend statusCode_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(value_s).data)).details)).response)).statusCode)
+| extend ip_ = tostring(parse_json(tostring(parse_json(value_s).data)).ip)
+| extend log_id_ = tostring(parse_json(tostring(parse_json(value_s).data)).log_id)
+| extend user_agent_ = tostring(parse_json(tostring(parse_json(value_s).data)).user_agent)
+| extend client_id_ = tostring(parse_json(tostring(parse_json(value_s).data)).client_id)
+| extend client_name_ = tostring(parse_json(tostring(parse_json(value_s).data)).client_name)
+| extend connection_ = tostring(parse_json(tostring(parse_json(value_s).data)).connection)
+| extend connection_id_ = tostring(parse_json(tostring(parse_json(value_s).data)).connection_id)
+| extend hostname_ = tostring(parse_json(tostring(parse_json(value_s).data)).hostname)
+| extend user_id_ = tostring(parse_json(tostring(parse_json(value_s).data)).user_id)
+| extend user_name_ = tostring(parse_json(tostring(parse_json(value_s).data)).user_name)
+| sort by TimeGenerated
+
 // User risk events over a one week period
 AADUserRiskEvents
 | where UserPrincipalName in~("x")
