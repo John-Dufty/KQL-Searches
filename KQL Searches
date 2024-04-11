@@ -1,3 +1,12 @@
+CloudAppEvents
+| where tostring(RawEventData.UserId) =~ "UPN"
+| where tostring(RawEventData.Operation) contains "download"
+| where tostring(RawEventData.ClientIP) == "IP" //Sometimes appears to break search, delete if returns null
+| where Application =~ "Insert_Cloud_App"
+| summarize count() by tostring(RawEventData.SourceFileExtension)
+// | summarize count() by strcat  (tostring(RawEventData.SiteUrl),tostring(RawEventData.SourceRelativeUrl))
+// | where tostring(RawEventData.SourceFileExtension) =~ ""
+
 // Authentication logs via SMS search
 Auth0Logs_CL
 | find "x"
