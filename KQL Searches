@@ -1,3 +1,10 @@
+SigninLogs
+| where UserPrincipalName in~("x")
+| extend authenticationStepResultDetail_ = tostring(parse_json(AuthenticationDetails)[0].authenticationStepResultDetail)
+| where authenticationStepResultDetail_ == "Correct password"
+| where Location != "AU"
+| summarize count() by UserPrincipalName, ResultType, ResultDescription, IPAddress, UserAgent, Location
+
 CloudAppEvents
 | where tostring(RawEventData.UserId) =~ "UPN"
 | where tostring(RawEventData.Operation) contains "download"
