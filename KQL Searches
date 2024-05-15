@@ -1,3 +1,4 @@
+// Correct password for sign-ins outside of Australia
 SigninLogs
 | where UserPrincipalName in~("x")
 | extend authenticationStepResultDetail_ = tostring(parse_json(AuthenticationDetails)[0].authenticationStepResultDetail)
@@ -5,6 +6,7 @@ SigninLogs
 | where Location != "AU"
 | summarize count() by UserPrincipalName, ResultType, ResultDescription, IPAddress, UserAgent, Location
 
+// Download drill-down via cloud app
 CloudAppEvents
 | where tostring(RawEventData.UserId) =~ "UPN"
 | where tostring(RawEventData.Operation) contains "download"
