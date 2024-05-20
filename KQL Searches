@@ -1,3 +1,14 @@
+// SecurityEvent - Password/Enable/Disable/Lock/Unlock/Fail/Expire
+// SecurityEvent - Log (Log/Logon/Logoff/Logged)
+SecurityEvent
+| where Account in~("x")
+| where Activity has_any ("log","logged","pass","password","enable","enabled","disable","disabled","lock","locked","unlock","unlocked","fail","failed","failure","expire","expired")
+
+// SecurityEvent - Create/Add/Modify/Remove/Delete/Register
+SecurityEvent
+| where Account in~("x")
+| where Activity has_any ("create","created","add","added","modify","modified","remove","removed","delete","deleted","register","registered")
+
 // Correct password for sign-ins outside of Australia
 SigninLogs
 | where UserPrincipalName in~("x")
