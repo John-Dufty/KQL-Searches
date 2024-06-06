@@ -1,3 +1,10 @@
+// Checks for code pushes for analytic rules
+SentinelAudit
+| where Description == "Create or update analytics rule." //only looks at analytic rules
+| summarize count() by bin(TimeGenerated, 2h), SentinelResourceName //pipeline doesnt last for more than 2 hours, need to make sure we only capture within a 2 hour period
+| where count_ > 1 // where there has been multiple updates to an analytic rule
+| summarize make_set(SentinelResourceName) //pulls out the list of the items that were seen updating multiple times
+
 // SecurityEvent - Password/Enable/Disable/Lock/Unlock/Fail/Expire
 // SecurityEvent - Log (Log/Logon/Logoff/Logged)
 SecurityEvent
