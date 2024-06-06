@@ -1,11 +1,22 @@
 // Checks for code pushes for analytic rules
-SentinelAudit
-| where TimeGenerated > ago (4h)
-| where Description == "Create or update analytics rule."
-| distinct TimeGenerated, SentinelResourceName
-| summarize first_update=min(TimeGenerated), last_update=max(TimeGenerated) by SentinelResourceName
-| where first_update != last_update
- 
+let Time = 90m;
+let SentinelAuditData = SentinelAudit
+    | where TimeGenerated > ago(Time)
+    | where Description == "Create or update analytics rule."
+    | distinct TimeGenerated, SentinelResourceName
+    | summarize first_update=min(TimeGenerated), last_update=max(TimeGenerated) by SentinelResourceName
+    | where first_update != last_update;
+let SecurityIncidentData = SecurityIncident
+    | where CreatedTime > ago(Time)
+    | summarize arg_min(TimeGenerated, *) by IncidentNumber, Title;
+SentinelAuditData
+| join kind=inner (
+    SecurityIncidentData
+    | project Title, IncidentNumber, CreatedTime
+) on $left.SentinelResourceName == $right.Title
+| where CreatedTime between (first_update .. last_update)
+| summarize make_set(IncidentNumber)
+
 // SecurityEvent - Password/Enable/Disable/Lock/Unlock/Fail/Expire
 // SecurityEvent - Log (Log/Logon/Logoff/Logged)
 SecurityEvent
