@@ -31,6 +31,7 @@ SecurityEvent
 // Correct password for sign-ins outside of Australia
 SigninLogs
 | where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
 | extend authenticationStepResultDetail_ = tostring(parse_json(AuthenticationDetails)[0].authenticationStepResultDetail)
 | where authenticationStepResultDetail_ == "Correct password"
 | where Location != "AU"
@@ -86,20 +87,17 @@ Auth0Logs_CL
 // User risk events over a one week period
 AADUserRiskEvents
 | where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
 | extend unfamiliarFeatures = iff(tostring(AdditionalInfo[0].Key) == "riskReasons", tostring(AdditionalInfo[0].Value), "")
 | project-rename NetworkIP=IpAddress
 | join kind=leftouter (ThreatIntelligenceIndicator 
 | project NetworkIP, Description) on NetworkIP
 | project UserPrincipalName, IPAddress=NetworkIP, unfamiliarFeatures, ThreatIntel=Description, RiskDetail, RiskEventType
 
-// Secretget event
-AzureDiagnostics
-| where identity_claim_upn_s contains "x"
-| where OperationName in ("SecretGet", "VaultGet")
-
 // User signins check over a one week period
 union SigninLogs, AADNonInteractiveUserSignInLogs
 | where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
 | extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic.deviceId), DeviceDetail_string)
 | extend DeviceID = tostring(parse_json(DeviceDetails).deviceId)
 | extend LocationDetails = strcat(tostring(LocationDetails_dynamic.deviceId), LocationDetails_string)
@@ -109,6 +107,20 @@ union SigninLogs, AADNonInteractiveUserSignInLogs
 | extend Result = strcat(ResultType, iff(isempty(ResultDescription), "", strcat(" - ", ResultDescription)))
 | summarize count() by UserPrincipalName, Result, IPAddress, UserAgent, Location, DeviceID, OperatingSystem
 | sort by UserPrincipalName, IPAddress
+
+// Operating system and sign-in type for travel alerts
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
+| where Location != "AU" and isnotempty(Location)
+| extend DeviceDetails = strcat(tostring(DeviceDetail_dynamic.deviceId), DeviceDetail_string)
+| extend OperatingSystem = tostring(parse_json(DeviceDetails).operatingSystem)
+| distinct UserPrincipalName, Type, Location, OperatingSystem
+
+// Secretget event
+AzureDiagnostics
+| where identity_claim_upn_s contains "x"
+| where OperationName in ("SecretGet", "VaultGet")
 
 // App modifications over time
 AuditLogs
