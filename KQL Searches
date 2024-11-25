@@ -1,3 +1,17 @@
+// Foreign token replication for local sign-ins
+let ForeignTokenIdentifiers = 
+    union SigninLogs, AADNonInteractiveUserSignInLogs
+    | where UserPrincipalName in~("x")
+    | where TimeGenerated > ago(7d)
+    | where Location != "AU"
+    | distinct UniqueTokenIdentifier;
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
+| where Location == "AU"
+| where UniqueTokenIdentifier in (ForeignTokenIdentifiers)
+| distinct UniqueTokenIdentifier, Location, TimeGenerated
+
 // Checks for code pushes for analytic rules
 let Time = 90m;
 let SentinelAuditData = SentinelAudit
