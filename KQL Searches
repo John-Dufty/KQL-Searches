@@ -1,3 +1,12 @@
+// Graph of frequency of IP octets over 7 day period
+union SigninLogs, AADNonInteractiveUserSignInLogs
+| where UserPrincipalName in~("x")
+| where TimeGenerated > ago(7d)
+| where IPAddress matches regex @"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$"
+| extend trimip = strcat_array(array_slice(split(IPAddress, "."), 0, 1), ".")
+| summarize count() by trimip, bin(TimeGenerated, 1hr)
+| render areachart 
+
 // Foreign token replication for local sign-ins
 let ForeignTokenIdentifiers = 
     union SigninLogs, AADNonInteractiveUserSignInLogs
